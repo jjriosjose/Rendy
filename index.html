@@ -1,0 +1,151 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mapa Ruta Eduar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-o9N1j7kG0Gq+bW/YZ6zF2v5VP8SpPzH+ebt1Cwr3JKk="
+    crossorigin=""
+  />
+  <style>
+    body, html {{
+      height: 100%;
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }}
+    #map {{
+      height: 100%;
+      width: 100%;
+    }}
+    .panel {{
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      z-index: 999;
+      width: 300px;
+    }}
+    .panel select, .panel input {{
+      width: 100%;
+      margin-bottom: 5px;
+    }}
+    .toggle {{
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }}
+    #error {{
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: red;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      display: none;
+      z-index: 999;
+    }}
+  </style>
+</head>
+<body>
+  <button class="toggle" onclick="document.querySelector('.panel').classList.toggle('hidden')">☰ Filtros</button>
+  <div class="panel hidden">
+    <select id="condicion"><option value="">-- Condición --</option></select>
+    <select id="semana"><option value="">-- Semana --</option></select>
+    <select id="dia"><option value="">-- Día --</option></select>
+    <select id="gestor"><option value="">-- Gestor --</option></select>
+    <select id="vendedor"><option value="">-- Vendedor --</option></select>
+    <input type="text" id="buscar" placeholder="Buscar Cliente..." />
+    <select id="cliente"><option value="">-- Cliente --</option></select>
+    <button onclick="visitar()">Visitar</button>
+    <button onclick="registrar()">Registro</button>
+    <button onclick="nuevo()">Nuevo Cliente</button>
+  </div>
+  <div id="error">Error al cargar datos.</div>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-o9N1j7kG0Gq+bW/YZ6zF2v5VP8SpPzH+ebt1Cwr3JKk="
+    crossorigin=""></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script>
+    const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9ERHBiz2QlK1GY_pxQhMtcMfQD_uGG_E_hQHC6WO0JzFspkStVqCmuBe6tXLhHsCM31cpsAz8tsJ5/pub?output=csv";
+    const formBase = "https://docs.google.com/forms/d/e/1FAIpQLSeEki-rHj1e1OgDTM9W_VFJmd9k3YfKNIpRhclVaK6mx-hHvA/viewform?usp=pp_url";
+    let data = [];
+    let map = L.map("map").setView([18.5, -69.9], 10);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {{
+      attribution: "© OpenStreetMap contributors"
+    }}).addTo(map);
+    function load() {{
+      Papa.parse(url, {{
+        download: true,
+        header: true,
+        complete: (results) => {{
+          try {{
+            data = results.data.filter(r => r.Latitud && r.Longitud);
+            updateFilters();
+            showMarkers();
+          }} catch (e) {{
+            document.getElementById("error").style.display = "block";
+          }}
+        }}
+      }});
+    }}
+    function updateFilters() {{
+      const semanas = [...new Set(data.map(r => r.SEMANA))];
+      const dias = [...new Set(data.map(r => r.DIA))];
+      const gestores = [...new Set(data.map(r => r.gestor_servicio))];
+      const vendedores = [...new Set(data.map(r => r.vendedor))];
+      const clientes = [...new Set(data.map(r => r.RazonSocial))];
+      for (const f of semanas) addOption("semana", f);
+      for (const f of dias) addOption("dia", f);
+      for (const f of gestores) addOption("gestor", f);
+      for (const f of vendedores) addOption("vendedor", f);
+      for (const f of clientes) addOption("cliente", f);
+    }}
+    function addOption(id, val) {{
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = val;
+      document.getElementById(id).appendChild(opt);
+    }}
+    function showMarkers() {{
+      data.forEach(d => {{
+        const lat = parseFloat(d.Latitud.replace(",", "."));
+        const lon = parseFloat(d.Longitud.replace(",", "."));
+        if (!isNaN(lat) && !isNaN(lon)) {{
+          const marker = L.marker([lat, lon]).addTo(map);
+          marker.bindPopup(`<b>${{d.RazonSocial}}</b><br/>Gestor: ${{d.gestor_servicio}}<br/>Vendedor: ${{d.vendedor}}`);
+        }}
+      }});
+    }}
+    function visitar() {{
+      const cliente = document.getElementById("cliente").value;
+      const fila = data.find(r => r.RazonSocial === cliente);
+      if (!fila) return alert("Selecciona un cliente.");
+      const link = `${{formBase}}&entry.985299062=${{fila.vendedor}}&entry.366494420=${{fila.gestor_servicio}}&entry.381054793=Existente&entry.1521955635=${{fila["Cod Empresa"]}}&entry.879964686=${{fila.RazonSocial}}&entry.1634734772=${{fila.Latitud}}&entry.566218311=${{fila.Longitud}}`;
+      window.open(link, "_blank");
+    }}
+    function registrar() {{
+      alert("Funcionalidad de registro no implementada.");
+    }}
+    function nuevo() {{
+      window.open(formBase, "_blank");
+    }}
+    load();
+  </script>
+</body>
+</html>
